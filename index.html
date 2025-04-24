@@ -1,16 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Policy Test Map</title>
+  <title>US State Housing Policy Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; padding: 0; }
-    #map { width: 100%; height: 100%; }
+    #map { width: 100%; height: 90vh; }
+    #controls { padding: 10px; background: white; }
+    select { font-size: 16px; padding: 5px; }
+    .legend { background: white; padding: 10px; font-size: 14px; line-height: 1.4em; }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <label for="policySelect">Select a Policy:</label>
+    <select id="policySelect"></select>
+  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
@@ -21,42 +28,91 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    const states = [
+      "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
+      "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
+      "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+      "Missouri", "Montana", "Nebraska", "Nevada", "New_Hampshire", "New_Jersey", "New_Mexico",
+      "New_York", "North_Carolina", "North_Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
+      "Rhode_Island", "South_Carolina", "South_Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+      "Virginia", "Washington", "West_Virginia", "Wisconsin", "Wyoming", "District_of_Columbia", "Puerto_Rico"
+    ];
+
     const baseURL = 'https://raw.githubusercontent.com/CTI00/AU-Practicum-Team-Source-Map/refs/heads/main/';
     const policyURL = baseURL + 'csvjson.json';
+
+    const policyMap = new Map();
+    const geoLayers = [];
+    let currentPolicy = '';
 
     fetch(policyURL)
       .then(res => res.json())
       .then(data => {
-        const policies = {};
+        // Process policy data into a map
         data.forEach(row => {
-          if (row.State === "Alabama" && row["Policy Area"] === "HTF") {
-            policies["HTF"] = {
-              name: row["Combined Policies"],
-              source: row["Combined Sources"],
-              value: parseInt(row.Numeric)
-            };
-          }
+          const state = row.State;
+          const policy = row["Policy Area"];
+          if (!policyMap.has(state)) policyMap.set(state, {});
+          policyMap.get(state)[policy] = {
+            name: row["Combined Policies"] || "No policy listed",
+            value: parseInt(row.Numeric) || 0
+          };
         });
 
-        fetch(baseURL + 'Alabama.json')
+        // Build policy selector
+        const policyAreas = [...new Set(data.map(d => d["Policy Area"]))];
+        const select = document.getElementById('policySelect');
+        policyAreas.forEach(policy => {
+          const option = document.createElement('option');
+          option.value = policy;
+          option.textContent = policy;
+          select.appendChild(option);
+        });
+
+        select.addEventListener('change', () => {
+          currentPolicy = select.value;
+          renderMap();
+        });
+
+        currentPolicy = policyAreas[0];
+        renderMap();
+      });
+
+    function renderMap() {
+      geoLayers.forEach(layer => map.removeLayer(layer));
+      geoLayers.length = 0;
+
+      states.forEach(state => {
+        const url = `${baseURL}${state}.json`;
+        fetch(url)
           .then(res => res.json())
           .then(geojson => {
-            L.geoJSON(geojson, {
-              style: () => ({
-                color: 'black',
-                weight: 1,
-                fillColor: policies.HTF && policies.HTF.value === 1 ? 'yellow' : 'lightgray',
-                fillOpacity: 0.8
-              }),
+            const layer = L.geoJSON(geojson, {
+              style: feature => {
+                const stateName = feature.properties.name || state.replace(/_/g, ' ');
+                const policyInfo = policyMap.get(stateName)?.[currentPolicy];
+                const hasPolicy = policyInfo && policyInfo.value === 1;
+                return {
+                  color: '#000',
+                  weight: 1,
+                  fillColor: hasPolicy ? 'yellow' : 'lightgray',
+                  fillOpacity: 0.8
+                };
+              },
               onEachFeature: (feature, layer) => {
-                const popupContent = policies.HTF
-                  ? `<strong>Alabama</strong><br><strong>Policy:</strong> ${policies.HTF.name}<br><strong>Source:</strong> ${policies.HTF.source}`
-                  : `<strong>Alabama</strong><br>No data for HTF policy.`;
-                layer.bindPopup(popupContent);
+                const stateName = feature.properties.name || state.replace(/_/g, ' ');
+                const policyInfo = policyMap.get(stateName)?.[currentPolicy];
+                const popup = policyInfo && policyInfo.value === 1
+                  ? `<strong>${stateName}</strong><br><strong>Policy:</strong> ${policyInfo.name}`
+                  : `<strong>${stateName}</strong><br>No data for this policy.`;
+                layer.bindPopup(popup);
               }
-            }).addTo(map);
+            });
+            geoLayers.push(layer);
+            layer.addTo(map);
           });
       });
+    }
   </script>
 </body>
 </html>
