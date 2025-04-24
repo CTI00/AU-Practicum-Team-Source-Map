@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Test Leaflet Map</title>
+  <title>Policy Test Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
@@ -18,8 +18,45 @@
     const map = L.map('map').setView([37.8, -96], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 6,
-      attribution: '© OpenStreetMap contributors'
+      attribution: '© OpenStreetMap'
     }).addTo(map);
+
+    const baseURL = 'https://raw.githubusercontent.com/CTI00/AU-Practicum-Team-Source-Map/refs/heads/main/';
+    const policyURL = baseURL + 'csvjson.json';
+
+    fetch(policyURL)
+      .then(res => res.json())
+      .then(data => {
+        const policies = {};
+        data.forEach(row => {
+          if (row.State === "Alabama" && row["Policy Area"] === "HTF") {
+            policies["HTF"] = {
+              name: row["Combined Policies"],
+              source: row["Combined Sources"],
+              value: parseInt(row.Numeric)
+            };
+          }
+        });
+
+        fetch(baseURL + 'Alabama.json')
+          .then(res => res.json())
+          .then(geojson => {
+            L.geoJSON(geojson, {
+              style: () => ({
+                color: 'black',
+                weight: 1,
+                fillColor: policies.HTF && policies.HTF.value === 1 ? 'yellow' : 'lightgray',
+                fillOpacity: 0.8
+              }),
+              onEachFeature: (feature, layer) => {
+                const popupContent = policies.HTF
+                  ? `<strong>Alabama</strong><br><strong>Policy:</strong> ${policies.HTF.name}<br><strong>Source:</strong> ${policies.HTF.source}`
+                  : `<strong>Alabama</strong><br>No data for HTF policy.`;
+                layer.bindPopup(popupContent);
+              }
+            }).addTo(map);
+          });
+      });
   </script>
 </body>
 </html>
