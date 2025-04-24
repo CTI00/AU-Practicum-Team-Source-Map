@@ -77,7 +77,7 @@
           .then(geojson => {
             const layer = L.geoJSON(geojson, {
               style: feature => {
-                const stateName = feature.properties.name || state.replace(/_/g, ' ');
+                const stateName = state.replace(/_/g, ' ');
                 const hasPolicy = policyMap.has(stateName) && policyMap.get(stateName)[currentPolicy] && policyMap.get(stateName)[currentPolicy].value === 1;
                 return {
                   color: 'black',
@@ -87,7 +87,7 @@
                 };
               },
               onEachFeature: (feature, layer) => {
-                const stateName = feature.properties.name || state.replace(/_/g, ' ');
+                const stateName = state.replace(/_/g, ' ');
                 const policyInfo = policyMap.get(stateName) && policyMap.get(stateName)[currentPolicy];
                 const popupContent = policyInfo
                   ? `<strong>${stateName}</strong><br><strong>Policy:</strong> ${policyInfo.name}<br><strong>Source:</strong> ${policyInfo.source}`
