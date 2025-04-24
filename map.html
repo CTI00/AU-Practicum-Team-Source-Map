@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>US Housing Policy Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+    .legend {
+      background: white;
+      padding: 10px;
+      line-height: 1.5em;
+      border-radius: 5px;
+    }
+    .dropdown {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 5px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="dropdown">
+    <label for="policySelect">Select Policy Area:</label>
+    <select id="policySelect"></select>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([37.8, -96], 4);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const policyDataUrl = 'https://yourusername.github.io/yourrepo/policies.json'; // Replace with your JSON URL
+    const geojsonUrl = 'https://yourusername.github.io/yourrepo/StateMaps.geojson'; // Replace with your GeoJSON URL
+
+    const policyColors = {
+      hasPolicy: 'yellow',
+      noPolicy: 'lightgrey'
+    };
+
+    const policySelect = document.getElementById('policySelect');
+    const policyAreas = [
+      'ADU', 'ARPA', 'Bond Caps', 'CCD', 'EAH', 'HCV', 'HTF', 'Insurance', 'IZ', 'LIHTC',
+      'Major Legislation', 'MH', 'MMP', 'P/H Restrictions', 'Pilot', 'QC', 'Rent Control',
+      'Tenant Protections', 'TribalA', 'Zoning'
+    ];
+
+    policyAreas.forEach(p => {
+      const option = document.createElement('option');
+      option.value = p;
+      option.text = p;
+      policySelect.appendChild(option);
+    });
+
+    let statesLayer;
+    let policyLookup = {};
+
+    fetch(policyDataUrl)
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(d => {
+          const key = `${d.State}_${d['Policy Area']}`;
+          policyLookup[key] = d;
+        });
+
+        fetch(geojsonUrl)
+          .then(res => res.json())
+          .then(geoData => {
+            statesLayer = L.geoJson(geoData, {
+              style: feature => getStyle(feature),
+              onEachFeature: (feature, layer) => {
+                layer.on('click', () => {
+                  const state = feature.properties.name;
+                  const policy = policySelect.value;
+                  const key = `${state}_${policy}`;
+                  const entry = policyLookup[key];
+                  if (entry && entry['Combined Policies']) {
+                    layer.bindPopup(`<b>${state}</b><br>${entry['Combined Policies']}<br><i>${entry['Combined Sources']}</i>`).openPopup();
+                  } else {
+                    layer.bindPopup(`<b>${state}</b><br>No data available`).openPopup();
+                  }
+                });
+              }
+            }).addTo(map);
+          });
+      });
+
+    policySelect.addEventListener('change', () => {
+      statesLayer.setStyle(feature => getStyle(feature));
+    });
+
+    function getStyle(feature) {
+      const state = feature.properties.name;
+      const policy = policySelect.value;
+      const key = `${state}_${policy}`;
+      const hasPolicy = policyLookup[key] && policyLookup[key]['Numeric'] === 1;
+      return {
+        color: 'white',
+        weight: 1,
+        fillOpacity: 0.7,
+        fillColor: hasPolicy ? policyColors.hasPolicy : policyColors.noPolicy
+      };
+    }
+
+    const legend = L.control({position: 'bottomright'});
+    legend.onAdd = function () {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML += '<b>Legend</b><br />';
+      div.innerHTML += `<i style="background:${policyColors.hasPolicy};width:20px;height:20px;display:inline-block;"></i> Has Policy<br />`;
+      div.innerHTML += `<i style="background:${policyColors.noPolicy};width:20px;height:20px;display:inline-block;"></i> No Policy`;
+      return div;
+    };
+    legend.addTo(map);
+  </script>
+</body>
+</html>
